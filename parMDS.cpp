@@ -98,7 +98,7 @@ class VRP {
       j = temp;
     }
 
-    size_t myoffset = ((2 * i * size) - (i * i) + i) / 2;
+    size_t myoffset = ((2 * i * size) - (i * i) + i) / 2; //bottleneck
     size_t correction = 2 * i + 1;
     return dist[myoffset + j - correction];
   }
@@ -155,6 +155,7 @@ void VRP::print_dist() {
 }
 
 // Parsing/Reading the .vrp file!
+//bottleneck: read(const string& filename) define fucntion as this instead of string to save time nad memory as & symbol will not copy just string and just look at it.
 unsigned VRP::read(string filename) {
   ifstream in(filename);
   if (!in.is_open()) {
@@ -193,7 +194,7 @@ unsigned VRP::read(string filename) {
   for (size_t i = 0; i < size; ++i) {
     getline(in, line);
 
-    stringstream iss(line);
+    stringstream iss(line);//bottlenck(minor) : stringstream object is made and destroyed everytime the loop runs due to it being declared inside the loop. could have declared it outside the loop and used the same object by clearing it and reusing again.
     size_t id;
     string xStr, yStr;
 
@@ -236,6 +237,7 @@ void VRP::print() {
 
 // Prims's MST using STL set
 std::vector<std::vector<Edge>>
+//bottleneck: use const instead like PrimsAlgo(const VRP &vrp, const std::vector<std::vector<Edge>> &graph)
 PrimsAlgo(const VRP &vrp, std::vector<std::vector<Edge>> &graph) {
   auto N = graph.size();
   const node_t INIT = -1;
@@ -245,7 +247,8 @@ PrimsAlgo(const VRP &vrp, std::vector<std::vector<Edge>> &graph) {
   std::vector<weight_t> toEdges(N, -1);
   std::vector<bool> visited(N, false);
 
-  std::set<std::pair<weight_t, node_t>> active;  // holds value and vertex
+  std::set<std::pair<weight_t, node_t>> active;  // holds value and vertex 
+  //bottleneck: could have used std::priority_queue instead of std::set as the first one leads to fasster fetch of short element due to heap
   std::vector<std::vector<Edge>> nG(N);
 
   node_t src = 0;
@@ -264,7 +267,7 @@ PrimsAlgo(const VRP &vrp, std::vector<std::vector<Edge>> &graph) {
     for (Edge E : graph[where]) {
       if (!visited[E.to] && E.length < key[E.to]) {  //W[{where,E.to}]
         key[E.to] = E.length;                        //W[{where,E.to}]
-        active.insert({key[E.to], E.to});
+        active.insert({key[E.to], E.to}); //bottleneck: we are not removing old entries, insetad we just skip an entry if it repeats
         //! DEBUG std::cout << key[E.to] <<" ~ " <<  E.to << std::endl;
         toEdges[E.to] = where;
       }
@@ -302,12 +305,13 @@ void printAdjList(const std::vector<std::vector<Edge>> &graph) {
 }
 
 // DFS Recursive.
+//std::stack object can be used for iterative DFS. as this recursive function may lead to stack overflow for a large vrp file 
 void ShortCircutTour(std::vector<std::vector<Edge>> &g, std::vector<bool> &visited, node_t u, std::vector<node_t> &out) {
   visited[u] = true;
   DEBUG std::cout << u << ' ';
   //! cvrpInOut.addRouteVertex(u);
   out.push_back(u);
-  for (auto e : g[u]) {
+  for (auto e : g[u]) { //bottleneck: for (const auto &e : g[u]) avoids unnecessary memory allocation
     node_t v = e.to;
     if (!visited[v]) {
       ShortCircutTour(g, visited, v, out);
@@ -342,6 +346,7 @@ convertToVrpRoutes(const VRP &vrp, const std::vector<node_t> &singleRoute) {
 }
 
 // Cost of a CVRP Solution!.
+//bottleneck: silly mistake depot = 1 in the next func signature, thoguh does not matter as value has not been used
 weight_t calRouteValue(const VRP &vrp, const std::vector<node_t> &aRoute, node_t depot = 1) {  //return cost of "a" route
   weight_t routeVal = 0;
   node_t prevPoint = 0;  //First point in a route is depot
@@ -350,7 +355,7 @@ weight_t calRouteValue(const VRP &vrp, const std::vector<node_t> &aRoute, node_t
     routeVal += vrp.get_dist(prevPoint, aPoint);
     prevPoint = aPoint;
   }
-  routeVal += vrp.get_dist(prevPoint, 0);  //Last point in a route is depot
+  routeVal += vrp.get_dist(prevPoint, DEPOT);  //Last point in a route is depot
 
   return routeVal;
 }
@@ -385,6 +390,7 @@ void printOutput(const VRP &vrp, const std::vector<std::vector<node_t>> &final_r
 
     total_cost += curr_route_cost;
   }
+  //bottleneck: the previous for loop can be replaced by total_cost += calRouteValue(vrp, final_routes[ii]); as the same amth is repeated again
 
   std::cout << "Cost " << total_cost << std::endl;
 }
@@ -404,7 +410,8 @@ void tsp_approx(const VRP &vrp, std::vector<node_t> &cities, std::vector<node_t>
     weight_t ThisX = vrp.node[tour[i - 1]].x;
     weight_t ThisY = vrp.node[tour[i - 1]].y;
     CloseDist = DBL_MAX;
-    for (j = ncities - 1;; j--) {
+
+    for (j = ncities - 1;; j--) {//bottleneck: as we have already done the math before Delete all of that math and just replace it with: weight_t ThisDist = vrp.get_dist(tour[i-1], tour[j]);. This saves the CPU from doing thousands of unnecessary multiplications
       weight_t ThisDist = (vrp.node[tour[j]].x - ThisX) * (vrp.node[tour[j]].x - ThisX);
       if (ThisDist <= CloseDist) {
         ThisDist += (vrp.node[tour[j]].y - ThisY) * (vrp.node[tour[j]].y - ThisY);
@@ -417,6 +424,7 @@ void tsp_approx(const VRP &vrp, std::vector<node_t> &cities, std::vector<node_t>
       }
     }
     /*swapping tour[i] and tour[ClosePt]*/
+    //bottleneck: use std::swap(tour[i], tour[ClosePt]); for better readability
     unsigned temp = tour[i];
     tour[i] = tour[ClosePt];
     tour[ClosePt] = temp;
@@ -473,6 +481,8 @@ void tsp_2opt(const VRP &vrp, std::vector<node_t> &cities, std::vector<node_t> &
     best_distance += vrp.get_dist(DEPOT, cities[ncities - 1]);
     // 1x 2x 3x 4 5
     //  1 2  3  4 5
+
+    //bottleneck: use std::reverse(tour.begin() + i, tour.begin() + k + 1); intstead of manually copying arrays back and forth using three different for loops just to reverse a section of the list. It is infinitely more readable and usually heavily optimized by the compile
     for (unsigned i = 0; i < ncities - 1; i++) {
       for (unsigned k = i + 1; k < ncities; k++) {
         for (unsigned c = 0; c < i; ++c) {
@@ -488,6 +498,8 @@ void tsp_2opt(const VRP &vrp, std::vector<node_t> &cities, std::vector<node_t> &
         for (unsigned c = k + 1; c < ncities; ++c) {
           tour[c] = cities[c];
         }
+        //bottleneck: For every combination, it loops 50 times to check the cost.If a route has 50 cities, doing a 2-opt requires checking about 1,225 combinations. the change in distance is just:
+        //cost_difference = (dist(A,C) + dist(B,D)) - (dist(A,B) + dist(C,D))If cost_difference is negative, the route improved! This turns 50 math operations into just 4, speeding up this function by an order of magnitude.
         double new_distance = 0.0;
         //~ new_distance += L2_dist(points.x_coords[tour[0]], points.y_coords[tour[0]], 0, 0); // computing distance of the first point in the route with the depot.
         new_distance += vrp.get_dist(DEPOT, tour[0]);
@@ -573,6 +585,7 @@ postProcessIt(const VRP &vrp, std::vector<std::vector<node_t>> &final_routes, we
   auto postprocessed_final_routes3 = postprocess_2OPT(vrp, final_routes);
 
 //~ weight_t postprocessed_final_routes_cost;
+//bottleneck in this function: we write the cost calculation logic again rater than reusing the one we made previously
 #pragma omp parallel for
   for (unsigned zzz = 0; zzz < final_routes.size(); ++zzz) {
     // include the better route between postprocessed_final_routes2[zzz] and postprocessed_final_routes3[zzz] in the final solution.
@@ -607,6 +620,12 @@ postProcessIt(const VRP &vrp, std::vector<std::vector<node_t>> &final_routes, we
     //~ postprocessed_route3_cost += L2_dist(points.x_coords[postprocessed_route3[sz3-1]], points.y_coords[postprocessed_route3[sz3-1]], 0, 0); // computing distance of the last point in the route with the depot.
     postprocessed_route3_cost += vrp.get_dist(DEPOT, postprocessed_route3[sz3 - 1]);
 
+    //bottleneck: in the below part of parallel processing multiple threads are simultaneously trying to run postprocessed_final_routes.push_back(...).they may step on each other's memory
+    //do this instead Before the #pragma, write: postprocessed_final_routes.resize(final_routes.size());
+    // Before the #pragma, write: postprocessed_final_routes.resize(final_routes.size());
+    // Then, inside the loop, replace push_back with direct indexing:
+    // postprocessed_final_routes[zzz] = postprocessed_route2;
+
     // postprocessed_route2_cost is lower
     if (postprocessed_route3_cost > postprocessed_route2_cost) {
       postprocessed_final_routes.push_back(postprocessed_route2);
@@ -633,7 +652,7 @@ calCost(const VRP &vrp, const std::vector<std::vector<node_t>> &final_routes) {
     weight_t curr_route_cost = 0;
     curr_route_cost += vrp.get_dist(DEPOT, final_routes[ii][0]);
 
-#pragma omp parallel for reduction(+ : curr_route_cost)
+    #pragma omp parallel for reduction(+ : curr_route_cost) //bottleneck: multithreading command inside another multithreading command! this leads to creation of too many subthreads that would have to fight over space on CPU leading to greater overhead.
     for (unsigned jj = 1; jj < final_routes[ii].size(); ++jj) {
       curr_route_cost += vrp.get_dist(final_routes[ii][jj - 1], final_routes[ii][jj]);
     }
@@ -650,7 +669,7 @@ bool verify_sol(const VRP &vrp, vector<vector<node_t>> final_routes, unsigned ca
    * 2. For every route, the capacity constraint is respected.
    **/
 
-  unsigned *hist = (unsigned *)malloc(sizeof(unsigned) * vrp.getSize());
+  unsigned *hist = (unsigned *)malloc(sizeof(unsigned) * vrp.getSize()); //bottleneck: malloc used but meamory not freed at the end of the function.use a modern C++ vector: std::vector<unsigned> hist(vrp.getSize(), 0);. It automatically handles its own cleanup.
   memset(hist, 0, sizeof(unsigned) * vrp.getSize());
 
   for (unsigned i = 0; i < final_routes.size(); ++i) {
@@ -760,9 +779,13 @@ int main(int argc, char *argv[]) {
   short PARLIMIT = vrp.params.nThreads;
 
 #pragma omp parallel for shared(minCost, minRoute) num_threads(PARLIMIT)
+//bottleneck: In the #pragma omp parallel for block, minCost and minRoute are marked as shared. However, there is no #pragma omp critical lock around the if (aCostRoute.first < minCost) block. This creates a race condition. Multiple threads could try to evaluate and overwrite minCost and minRoute at the exact same time, which can lead to corrupted data or missed optimal routes.
   for (int i = 0; i < 100000; i += PARLIMIT) {                                     // 10^5 is chosen empirically beyond which the solution quality improves very merge amount!
     for (auto &list : mstCopy) {                                                   //& indicates the exiting mst list will be modified and subsequent Shortcircuit computation
-      std::shuffle(list.begin(), list.end(), std::default_random_engine(rand()));  //seed | i | rand()  // DEFAULT is rand
+      std::shuffle(list.begin(), list.end(), std::default_random_engine(rand()));
+      //bottleneck:Thread 1 is trying to shuffle the tree while Thread 2 is trying to read the mstCopy for its DFS.Every thread needs its own private sandbox. You need to declare auto local_mst = mstCopy; inside the parallel loop, and shuffle local_mst instead.
+      // bottleneck: rand() function uses a hidden global state. When 20 threads call it at once, 19 of them have to pause and wait for the 1st one to finish. This destroys the speed advantage of multithreading.Use a thread_local random number generator so each thread generates its own random numbers independently 
+      //seed | i | rand()  // DEFAULT is rand
     }
 
     //reset
